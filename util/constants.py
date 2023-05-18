@@ -23,8 +23,8 @@ numerical_columns = [
     'pot',
     'hemo',
     'pcv',
-    'wc',
-    'rc'
+    'wbcc',
+    'rbcc',
 ]
 all_columns = categorical_columns + numerical_columns
 
