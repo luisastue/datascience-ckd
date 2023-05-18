@@ -1,1 +1,3 @@
 .DS_Store
+/preprocessed
+/util/__pycache__
