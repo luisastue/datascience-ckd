@@ -50,7 +50,7 @@ def train(model):
         models[name] = model
         metrics['accuracies'][name] = model.score(X_test, y_test)
         metrics['precisions'][name] = precision_score(
-            y_test, y_pred, average='weighted')
+            y_test, y_pred, average='weighted', )
         metrics['recalls'][name] = recall_score(
             y_test, y_pred, average='weighted')
         metrics['f1_scores'][name] = f1_score(
@@ -148,17 +148,20 @@ def plot_learning_curves(learning_curves):
     # Show the plot
     plt.show()
 
+# feature importances is a dict of dataframes
 
-def plot_feature_importances(feature_importances):
+
+def plot_feature_importances(feature_importances: dict):
     import matplotlib.pyplot as plt
-    # plot all feature importances as subplots
-    num_importances = len(feature_importances.items())
+
+    color_palette = plt.cm.Set3
 
     fig, axs = plt.subplots(nrows=2, ncols=3, figsize=(12, 8))
 
     for i, (name, importance) in enumerate(feature_importances.items()):
         importance = importance.sort_values(by='Importance', ascending=False)
         importance = importance.head(10)
+
         importance.plot.bar(ax=axs.flat[i])
         axs.flat[i].set_title(f'Feature Importance {name}')
         axs.flat[i].set_xlabel('Feature')
