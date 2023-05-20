@@ -1,5 +1,4 @@
 .DS_Store
-/processed/*
 /util/__pycache__
 .vscode/
 

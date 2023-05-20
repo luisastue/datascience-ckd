@@ -1,0 +1,11 @@
+age
+blood_pressure
+blood_glucose_random
+blood_urea
+serum_creatinine
+sodium
+potassium
+hemoglobin
+packed_cell_volume
+white_blood_cell_count
+red_blood_cell_count

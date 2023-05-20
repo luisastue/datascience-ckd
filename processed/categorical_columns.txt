@@ -1,0 +1,14 @@
+specific_gravity
+albumin
+sugar
+red_blood_cells
+pus_cell
+pus_cell_clumps
+bacteria
+hypertension
+diabetes_mellitus
+coronary_artery_disease
+appetite
+pedal_edema
+anemia
+class
