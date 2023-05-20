@@ -1,4 +1,6 @@
-def train(model):
+
+
+def impute_and_train(model):
     import pandas as pd
     import numpy as np
     import matplotlib.pyplot as plt
@@ -8,73 +10,106 @@ def train(model):
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.metrics import classification_report,  ConfusionMatrixDisplay
     from matplotlib.pylab import rcParams
-
-    dataframes = {
-        'mean': pd.read_csv('imputed/mean.csv'),
-        'median': pd.read_csv('imputed/median.csv'),
-        'mode': pd.read_csv('imputed/mode.csv'),
-        'KNN': pd.read_csv('imputed/KNN.csv'),
-        'MICE': pd.read_csv('imputed/MICE.csv'),
-        'iterative': pd.read_csv('imputed/iterative.csv'),
-    }
-
-    from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
+    from sklearn.model_selection import train_test_split
+    from sklearn.impute import SimpleImputer, KNNImputer
+    from sklearn.experimental import enable_iterative_imputer
+    from sklearn.impute import IterativeImputer
+    from fancyimpute import IterativeImputer as MICE
+    from sklearn.metrics import confusion_matrix, classification_report
+    import numpy as np
+    from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score, accuracy_score
     from sklearn.model_selection import learning_curve
 
-    models = {}
-    metrics = {
-        'accuracies': {},
-        'precisions': {},
-        'recalls': {},
-        'f1_scores': {},
+    imputation_methods = {
+        'mean': SimpleImputer(strategy='mean'),
+        'median': SimpleImputer(strategy='median'),
+        'mode': SimpleImputer(strategy='most_frequent'),
+        'KNN': KNNImputer(n_neighbors=2),
+        'MICE': MICE(),
+        'iterative': IterativeImputer(random_state=0),
     }
-    confusion_matrices = {}
-    learning_curves = {}
+    models = {method: [] for method in imputation_methods}
+    metrics = {
+        'accuracies': {method: [] for method in imputation_methods},
+        'precisions': {method: [] for method in imputation_methods},
+        'recalls': {method: [] for method in imputation_methods},
+        'f1_scores': {method: [] for method in imputation_methods},
+    }
+    confusion_matrices = {method: [] for method in imputation_methods}
+
+    dataframes = {method: [] for method in imputation_methods}
     # feature_importances = {}
 
-    for (name, dataframe) in dataframes.items():
+    dataframe = pd.read_csv('processed/df_numeric.csv')
+    l = None
+
+    for (name, imputer) in imputation_methods.items():
         print(f'learning with {name} imputed data')
-        y = np.asarray(dataframe['class'])
+
+        # Define the number of desired cross-validation iterations
+        num_cv_iterations = 5
+
         X = np.asarray(dataframe.drop(columns=['class']))
+        y = np.asarray(dataframe['class'])
 
-        # split the dataset to train and test sets. set the test set size to 20%.
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.20, )
+        # Perform cross-validation iterations
+        for i in range(num_cv_iterations):
+            print('Cross-validation iteration {}/{}'.format(i + 1, num_cv_iterations))
 
-        # Train Decision Tree Classifer
-        model = model.fit(X_train, y_train)
+            # Split the data into training and test sets
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=0.2, random_state=i)
 
-        # Predict the response for test dataset
-        y_pred = model.predict(X_test)
+            # Perform imputation on the training set
+            imputer = SimpleImputer()
+            X_train_imputed = imputer.fit_transform(X_train)
 
-        models[name] = model
-        metrics['accuracies'][name] = model.score(X_test, y_test)
-        metrics['precisions'][name] = precision_score(
-            y_test, y_pred, average='weighted', )
-        metrics['recalls'][name] = recall_score(
-            y_test, y_pred, average='weighted')
-        metrics['f1_scores'][name] = f1_score(
-            y_test, y_pred, average='weighted')
-        confusion_matrices[name] = confusion_matrix(
-            y_test, y_pred, labels=model.classes_)
-        learning_curves[name] = learning_curve(
-            model, X_train, y_train, cv=5, n_jobs=-1, train_sizes=np.linspace(.1, 1.0, 5))
-        # feature_importances[name] = pd.DataFrame(model.feature_importances_, index=dataframe.drop(columns=['class']).columns, columns=["Importance"])
+            # Drop NaN values from the test set
+            X_test_dropped = X_test[~np.isnan(X_test).any(axis=1)]
+            y_test_dropped = y_test[~np.isnan(X_test).any(axis=1)]
 
+            # Train the model on the imputed training set
+            model.fit(X_train_imputed, y_train)
+
+            # Make predictions on the dropped test set
+            y_pred = model.predict(X_test_dropped)
+
+            # Calculate the accuracy of the model
+
+            dataframes[name].append(
+                (X_train_imputed, y_train, X_test_dropped, y_test_dropped))
+            models[name].append(model)
+            metrics['accuracies'][name].append(
+                accuracy_score(y_test_dropped, y_pred))
+            metrics['precisions'][name].append(precision_score(
+                y_test_dropped, y_pred, average='weighted', ))
+            metrics['recalls'][name].append(recall_score(
+                y_test_dropped, y_pred, average='weighted'))
+            metrics['f1_scores'][name].append(f1_score(
+                y_test_dropped, y_pred, average='weighted'))
+            confusion_matrices[name].append(confusion_matrix(
+                y_test_dropped, y_pred, labels=model.classes_))
+
+            # learning curve
+            l = learning_curve(
+                model, X_train_imputed, y_train, cv=5, scoring='accuracy', n_jobs=-1, train_sizes=np.linspace(0.01, 1.0, 50))
     return {
         'models': models,
         'metrics': metrics,
         'confusion_matrices': confusion_matrices,
-        'learning_curves': learning_curves,
+        'learning_curve': l,
+        'dataframes': dataframes,
     }
 
 
 def plot_metrics(metrics):
     import matplotlib.pyplot as plt
+    import numpy as np
     fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(12, 8))
 
     for i, (name, metric) in enumerate(metrics.items()):
-        axs.flat[i].bar(metric.keys(), metric.values())
+        mean_arrays = {key: np.mean(arr) for key, arr in metric.items()}
+        axs.flat[i].bar(mean_arrays.keys(), mean_arrays.values())
         axs.flat[i].set_ylim(0.7, 1)
         axs.flat[i].set_xlabel('Imputation Method')
         axs.flat[i].set_ylabel(name)
@@ -84,18 +119,17 @@ def plot_metrics(metrics):
     plt.show()
 
 
-def plot_confusion_matrices(confusion_matrices):
+def plot_mean_confusion_matrices(confusion_matrices):
     import matplotlib.pyplot as plt
     import numpy as np
     # plot all confusion matrices as subplots
     num_matrices = len(confusion_matrices.items())
     matrix_size = 2
 
-    # Set up the figure and subplots
-    fig, axs = plt.subplots(nrows=2, ncols=3, figsize=(12, 8))
+    fig, axs = plt.subplots(nrows=2, ncols=3, figsize=(12, 7))
+    for i, (name, matrices) in enumerate(confusion_matrices.items()):
+        cm = np.mean(matrices, axis=0)
 
-    # Iterate over each confusion matrix and plot it as a heatmap in a subplot
-    for i, (name, cm) in enumerate(confusion_matrices.items()):
         im = axs.flat[i].imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
         axs.flat[i].set_title(f'Confusion Matrix {name}')
         axs.flat[i].set_xticks(np.arange(matrix_size))
@@ -116,34 +150,24 @@ def plot_confusion_matrices(confusion_matrices):
     plt.show()
 
 
-def plot_learning_curves(learning_curves):
+def plot_learning_curve(learning_curve):
     import matplotlib.pyplot as plt
+    import numpy as np
     # plot all learning curves as subplots
-    num_curves = len(learning_curves.items())
 
-    # Set up the figure and subplots
-    fig, axs = plt.subplots(nrows=2, ncols=3, figsize=(12, 8))
+    plt.figure(figsize=(6, 4))
 
-    # Iterate over each confusion matrix and plot it as a heatmap in a subplot
-    for i, (name, curve) in enumerate(learning_curves.items()):
-        # curve is this: learning_curve(model, X_train, y_train, cv=5, n_jobs=-1, train_sizes=np.linspace(.1, 1.0, 5))
-        train_sizes = curve[0]
-        train_scores = curve[1]
-        test_scores = curve[2]
-
-        # plot the train and test scores
-        axs.flat[i].grid()
-        axs.flat[i].plot(train_sizes, train_scores.mean(
-            axis=1), 'o-', color="r", label="Training score")
-        axs.flat[i].plot(train_sizes, test_scores.mean(
-            axis=1), 'o-', color="g", label="Cross-validation score")
-        axs.flat[i].legend(loc="best")
-        axs.flat[i].set_title(f'Learning Curve {name}')
-        axs.flat[i].set_xlabel('Training examples')
-        axs.flat[i].set_ylabel('Score')
-
-    # Add a colorbar and adjust the layout
-    fig.tight_layout()
+    train_sizes, train_scores, test_scores = learning_curve
+    # plot the train and test scores
+    plt.grid()
+    plt.plot(train_sizes, train_scores.mean(
+        axis=1), '-', color="r", label="Training score")
+    plt.plot(train_sizes, test_scores.mean(
+        axis=1), '-', color="g", label="Cross-validation score")
+    plt.legend(loc="best")
+    plt.title(f'Learning Curve')
+    plt.xlabel('Training examples')
+    plt.ylabel('Score')
 
     # Show the plot
     plt.show()
