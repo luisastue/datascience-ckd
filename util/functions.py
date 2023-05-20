@@ -37,11 +37,11 @@ def impute_and_train(model):
     }
     confusion_matrices = {method: [] for method in imputation_methods}
 
+    learning_curves = {method: [] for method in imputation_methods}
     dataframes = {method: [] for method in imputation_methods}
     # feature_importances = {}
 
     dataframe = pd.read_csv('processed/df_numeric.csv')
-    l = None
 
     for (name, imputer) in imputation_methods.items():
         print(f'learning with {name} imputed data')
@@ -91,13 +91,13 @@ def impute_and_train(model):
                 y_test_dropped, y_pred, labels=model.classes_))
 
             # learning curve
-            l = learning_curve(
-                model, X_train_imputed, y_train, cv=5, scoring='accuracy', n_jobs=-1, train_sizes=np.linspace(0.01, 1.0, 50))
+            learning_curves[name].append(learning_curve(
+                model, X_train_imputed, y_train, cv=5, scoring='accuracy', n_jobs=-1, train_sizes=np.linspace(0.01, 1.0, 50)))
     return {
         'models': models,
         'metrics': metrics,
         'confusion_matrices': confusion_matrices,
-        'learning_curve': l,
+        'learning_curves': learning_curves,
         'dataframes': dataframes,
     }
 
@@ -150,24 +150,38 @@ def plot_mean_confusion_matrices(confusion_matrices):
     plt.show()
 
 
-def plot_learning_curve(learning_curve):
+def plot_learning_curves(learning_curves):
     import matplotlib.pyplot as plt
     import numpy as np
     # plot all learning curves as subplots
 
-    plt.figure(figsize=(6, 4))
+    fig, axs = plt.subplots(nrows=2, ncols=3, figsize=(12, 8))
 
-    train_sizes, train_scores, test_scores = learning_curve
-    # plot the train and test scores
-    plt.grid()
-    plt.plot(train_sizes, train_scores.mean(
-        axis=1), '-', color="r", label="Training score")
-    plt.plot(train_sizes, test_scores.mean(
-        axis=1), '-', color="g", label="Cross-validation score")
-    plt.legend(loc="best")
-    plt.title(f'Learning Curve')
-    plt.xlabel('Training examples')
-    plt.ylabel('Score')
+    for i, (name, curves) in enumerate(learning_curves.items()):
+        train_sizes = []
+        train_scores = []
+        test_scores = []
+        for c in curves:
+            train_sizes.append(c[0])
+            train_scores.append(c[1])
+            test_scores.append(c[2])
+        train_sizes = np.mean(train_sizes, axis=0)
+        train_scores = np.mean(train_scores, axis=0)
+        test_scores = np.mean(test_scores, axis=0)
+
+        # plot the train and test scores
+        axs.flat[i].grid()
+        axs.flat[i].plot(train_sizes, train_scores.mean(
+            axis=1), '-', color="r", label="Training score")
+        axs.flat[i].plot(train_sizes, test_scores.mean(
+            axis=1), '-', color="g", label="Cross-validation score")
+        axs.flat[i].legend(loc="best")
+        axs.flat[i].set_title(f'Learning Curve {name}')
+        axs.flat[i].set_xlabel('Training examples')
+        axs.flat[i].set_ylabel('Score')
+
+    # Add a colorbar and adjust the layout
+    fig.tight_layout()
 
     # Show the plot
     plt.show()
