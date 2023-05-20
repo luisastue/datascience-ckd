@@ -61,7 +61,6 @@ def impute_and_train(model):
                 X, y, test_size=0.2, random_state=i)
 
             # Perform imputation on the training set
-            imputer = SimpleImputer()
             X_train_imputed = imputer.fit_transform(X_train)
 
             # Drop NaN values from the test set
