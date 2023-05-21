@@ -96,7 +96,6 @@ def impute_and_train(dataframe, model_constructor, params={}):
             except:
                 pass
 
-            # add column names
             model.fit(X_train_imputed.values, y_train)
 
             # Make predictions on the dropped test set
@@ -225,9 +224,10 @@ def plot_feature_importances(feature_importances: dict[str, pd.DataFrame]):
     import matplotlib.pyplot as plt
     import numpy as np
 
-    fig, ax = plt.subplots(1, 1, figsize=(20, 6))
+    first_name = list(feature_importances.keys())[0]
+    fig, ax = plt.subplots(1, 1, figsize=(20, 12))
     bar_width = 0.1
-    x = np.arange(len(feature_importances['mean']))
+    x = np.arange(len(feature_importances[first_name]))
 
     for i, (name, importance) in enumerate(feature_importances.items()):
         plt.bar(x + i * bar_width,
@@ -237,6 +237,6 @@ def plot_feature_importances(feature_importances: dict[str, pd.DataFrame]):
     plt.xlabel('Feature')
     plt.ylabel('Importance')
     plt.xticks(x + bar_width * (len(feature_importances) - 1) /
-               2, feature_importances['mean'].index,  rotation=90)
+               2, feature_importances[first_name].index,  rotation=90)
     plt.legend()
     plt.show()

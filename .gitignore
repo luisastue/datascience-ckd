@@ -1,4 +1,4 @@
 .DS_Store
 /util/__pycache__
 .vscode/
-
+best_model_temp.h5
