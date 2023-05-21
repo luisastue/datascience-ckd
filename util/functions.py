@@ -1,21 +1,38 @@
+import pandas as pd
 
 
-def impute_and_train(model):
+def snap_dataframe(dataframe: pd.DataFrame):
+    binary_columns = []
+    if 'diabetes_mellitus' in dataframe.columns:
+        binary_columns = ['red_blood_cells', 'pus_cell', 'pus_cell_clumps', 'bacteria', 'hypertension',
+                          'diabetes_mellitus', 'coronary_artery_disease', 'appetite', 'pedal_edema', 'anemia', ]
+    else:
+        binary_columns = ['red_blood_cells', 'pus_cell', 'pus_cell_clumps', 'bacteria', 'hypertension',
+                          'coronary_artery_disease', 'appetite', 'pedal_edema', 'anemia', ]
+    zero_to_five = ['albumin', 'sugar']
+    sg = ['specific_gravity']
+    snapped_bin = dataframe[binary_columns].applymap(
+        lambda x: 1 if x > 0.5 else 0)
+    dataframe[binary_columns] = snapped_bin
+    snapped_zero_to_five = dataframe[zero_to_five].applymap(
+        lambda x: 0 if x < 0.5 else 1 if x < 1.5 else 2 if x < 2.5 else 3 if x < 3.5 else 4 if x < 4.5 else 5)
+    dataframe[zero_to_five] = snapped_zero_to_five
+    snapped_sg = dataframe[sg].applymap(lambda x: 1.005 if x < 1.0075 else 1.010 if x <
+                                        1.0125 else 1.015 if x < 1.0175 else 1.020 if x < 1.0225 else 1.025)
+    dataframe[sg] = snapped_sg
+    return dataframe
+
+
+def impute_and_train(dataframe, model_constructor, params={}):
     import pandas as pd
     import numpy as np
     import matplotlib.pyplot as plt
 
     from sklearn.model_selection import train_test_split
-    from sklearn.tree import DecisionTreeClassifier, plot_tree
-    from sklearn.ensemble import RandomForestClassifier
-    from sklearn.metrics import classification_report,  ConfusionMatrixDisplay
-    from matplotlib.pylab import rcParams
-    from sklearn.model_selection import train_test_split
     from sklearn.impute import SimpleImputer, KNNImputer
     from sklearn.experimental import enable_iterative_imputer
     from sklearn.impute import IterativeImputer
     from fancyimpute import IterativeImputer as MICE
-    from sklearn.metrics import confusion_matrix, classification_report
     import numpy as np
     from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score, accuracy_score
     from sklearn.model_selection import learning_curve
@@ -41,8 +58,6 @@ def impute_and_train(model):
     dataframes = {method: [] for method in imputation_methods}
     # feature_importances = {}
 
-    dataframe = pd.read_csv('processed/df_numeric.csv')
-
     for (name, imputer) in imputation_methods.items():
         print(f'learning with {name} imputed data')
 
@@ -61,14 +76,28 @@ def impute_and_train(model):
                 X, y, test_size=0.2, random_state=i)
 
             # Perform imputation on the training set
-            X_train_imputed = imputer.fit_transform(X_train)
+            X_train_imputed = pd.DataFrame(X_train, columns=dataframe.drop(
+                columns=['class']).columns
+            )
+            X_train_imputed[X_train_imputed.columns] = imputer.fit_transform(
+                X_train)
+            X_train_imputed = snap_dataframe(pd.DataFrame(X_train_imputed))
 
             # Drop NaN values from the test set
             X_test_dropped = X_test[~np.isnan(X_test).any(axis=1)]
             y_test_dropped = y_test[~np.isnan(X_test).any(axis=1)]
 
             # Train the model on the imputed training set
-            model.fit(X_train_imputed, y_train)
+            model = model_constructor(**params)
+
+            try:
+                model.set_feature_names(dataframe.drop(
+                    columns=['class']).columns)
+            except:
+                pass
+
+            # add column names
+            model.fit(X_train_imputed.values, y_train)
 
             # Make predictions on the dropped test set
             y_pred = model.predict(X_test_dropped)
@@ -88,10 +117,13 @@ def impute_and_train(model):
                 y_test_dropped, y_pred, average='weighted'))
             confusion_matrices[name].append(confusion_matrix(
                 y_test_dropped, y_pred, labels=model.classes_))
+            try:
+                # learning curve
+                learning_curves[name].append(learning_curve(
+                    model, X_train_imputed, y_train, cv=5, scoring='accuracy', n_jobs=-1, train_sizes=np.linspace(0.01, 1.0, 50)))
+            except:
+                print('learning curve could not be created')
 
-            # learning curve
-            learning_curves[name].append(learning_curve(
-                model, X_train_imputed, y_train, cv=5, scoring='accuracy', n_jobs=-1, train_sizes=np.linspace(0.01, 1.0, 50)))
     return {
         'models': models,
         'metrics': metrics,
@@ -188,21 +220,23 @@ def plot_learning_curves(learning_curves):
 # feature importances is a dict of dataframes
 
 
-def plot_feature_importances(feature_importances: dict):
+def plot_feature_importances(feature_importances: dict[str, pd.DataFrame]):
+    import pandas as pd
     import matplotlib.pyplot as plt
+    import numpy as np
 
-    color_palette = plt.cm.Set3
-
-    fig, axs = plt.subplots(nrows=2, ncols=3, figsize=(12, 8))
+    fig, ax = plt.subplots(1, 1, figsize=(20, 6))
+    bar_width = 0.1
+    x = np.arange(len(feature_importances['mean']))
 
     for i, (name, importance) in enumerate(feature_importances.items()):
-        importance = importance.sort_values(by='Importance', ascending=False)
-        importance = importance.head(10)
+        plt.bar(x + i * bar_width,
+                importance['Importance'], width=bar_width, label=name)
 
-        importance.plot.bar(ax=axs.flat[i])
-        axs.flat[i].set_title(f'Feature Importance {name}')
-        axs.flat[i].set_xlabel('Feature')
-        axs.flat[i].set_ylabel('Importance')
-
-    fig.tight_layout()
+    plt.title('Feature Importance')
+    plt.xlabel('Feature')
+    plt.ylabel('Importance')
+    plt.xticks(x + bar_width * (len(feature_importances) - 1) /
+               2, feature_importances['mean'].index,  rotation=90)
+    plt.legend()
     plt.show()
