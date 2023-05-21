@@ -109,10 +109,13 @@ def impute_and_train(dataframe, model_constructor, params={}):
                 y_test_dropped, y_pred, average='weighted'))
             confusion_matrices[name].append(confusion_matrix(
                 y_test_dropped, y_pred, labels=model.classes_))
+            try:
+                # learning curve
+                learning_curves[name].append(learning_curve(
+                    model, X_train_imputed, y_train, cv=5, scoring='accuracy', n_jobs=-1, train_sizes=np.linspace(0.01, 1.0, 50)))
+            except:
+                print('learning curve could not be created')
 
-            # learning curve
-            learning_curves[name].append(learning_curve(
-                model, X_train_imputed, y_train, cv=5, scoring='accuracy', n_jobs=-1, train_sizes=np.linspace(0.01, 1.0, 50)))
     return {
         'models': models,
         'metrics': metrics,
