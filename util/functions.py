@@ -89,6 +89,14 @@ def impute_and_train(dataframe, model_constructor, params={}):
 
             # Train the model on the imputed training set
             model = model_constructor(**params)
+
+            try:
+                model.set_feature_names(dataframe.drop(
+                    columns=['class']).columns)
+            except:
+                pass
+
+            # add column names
             model.fit(X_train_imputed.values, y_train)
 
             # Make predictions on the dropped test set
