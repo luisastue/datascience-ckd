@@ -23,7 +23,7 @@ def snap_dataframe(dataframe: pd.DataFrame):
     return dataframe
 
 
-def impute_and_train(dataframe, model_constructor, params={}):
+def impute_and_train(dataframe: pd.DataFrame, model_constructor, params={}):
     import pandas as pd
     import numpy as np
     import matplotlib.pyplot as plt
