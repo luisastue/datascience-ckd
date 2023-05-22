@@ -121,7 +121,7 @@ def impute_and_train(dataframe: pd.DataFrame, model_constructor, params={}):
                 learning_curves[name].append(learning_curve(
                     model, X_train_imputed, y_train, cv=5, scoring='accuracy', n_jobs=-1, train_sizes=np.linspace(0.01, 1.0, 50)))
             except:
-                print('learning curve could not be created')
+                pass
 
     return {
         'models': models,
